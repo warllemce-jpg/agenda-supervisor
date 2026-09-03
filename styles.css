@@ -1,0 +1,195 @@
+/* styles.css — legibilidade no sol e alcance de um polegar só.
+   Nao ha tema escuro de proposito: fundo branco com texto quase preto e o
+   contraste mais alto que da para ter, porque a tela vai ser lida no
+   canteiro, com o brilho no maximo. */
+
+:root {
+  --tinta: #111827;
+  --tinta-fraca: #4b5563;
+  --papel: #ffffff;
+  --marca: #d97706;
+  --linha: #d1d5db;
+  --alerta: #b91c1c;
+  --ok: #15803d;
+  --topo: env(safe-area-inset-top, 0px);
+  --base: env(safe-area-inset-bottom, 0px);
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--papel);
+  color: var(--tinta);
+  font: 17px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  overscroll-behavior: none;
+}
+
+.tela {
+  min-height: 100%;
+  padding: calc(16px + var(--topo)) 16px calc(16px + var(--base));
+  display: flex;
+  flex-direction: column;
+}
+.tela[hidden] { display: none; }
+
+h1 { font-size: 26px; font-weight: 800; margin: 4px 0 12px; }
+.lead { font-size: 18px; margin: 0 0 18px; }
+.sussurro { color: var(--tinta-fraca); font-size: 15px; }
+.estado { display: block; font-size: 15px; margin-top: 6px; }
+.estado.bom { color: var(--ok); font-weight: 700; }
+.estado.ruim { color: var(--alerta); font-weight: 700; }
+
+/* ---- as duas acoes da abertura (decisao 9) ----
+   Ocupam a parte de cima como manda a spec, mas descem ate um pouco depois da
+   metade da tela: a borda inferior de cada botao cai dentro do alcance do
+   polegar de quem segura o Poco com uma mao só. */
+.duplo {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  height: 52vh;
+  min-height: 260px;
+}
+
+.gigante {
+  font: 800 30px/1.1 inherit;
+  letter-spacing: 0.5px;
+  border: 3px solid var(--tinta);
+  border-radius: 14px;
+  background: var(--tinta);
+  color: #fff;
+  padding: 8px;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+.gigante::after {
+  content: "";
+  display: block;
+  width: 46px;
+  height: 5px;
+  background: var(--marca);
+  border-radius: 3px;
+  margin: 14px auto 0;
+}
+.gigante.secundario { background: var(--papel); color: var(--tinta); }
+.gigante[disabled] { opacity: 0.45; }
+
+.contextos { display: grid; gap: 12px; margin-bottom: 18px; }
+.contextos .gigante { min-height: 92px; font-size: 24px; }
+
+/* ---- painel de informacao: le, nao exige nada ---- */
+.painel {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 2px solid var(--linha);
+  flex: 1;
+}
+#info-triagem { font-size: 20px; font-weight: 700; margin: 0 0 6px; }
+
+/* ---- faixa de ritual pendente ---- */
+.faixa {
+  display: block;
+  width: 100%;
+  background: var(--marca);
+  color: #fff;
+  font-weight: 800;
+  font-size: 18px;
+  border: 0;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+  text-align: left;
+  touch-action: manipulation;
+}
+.faixa[hidden] { display: none; }
+
+/* ---- anotar ---- */
+#campo {
+  width: 100%;
+  flex: 1;
+  min-height: 140px;
+  font: 20px/1.4 inherit;
+  color: var(--tinta);
+  padding: 14px;
+  border: 3px solid var(--tinta);
+  border-radius: 12px;
+  resize: none;
+  background: var(--papel);
+}
+#campo:focus { outline: 3px solid var(--marca); outline-offset: 2px; }
+
+.rodape {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.acao {
+  font: 800 19px/1 inherit;
+  padding: 18px 26px;
+  border: 3px solid var(--tinta);
+  border-radius: 12px;
+  background: var(--papel);
+  color: var(--tinta);
+  touch-action: manipulation;
+  cursor: pointer;
+}
+.acao.principal { background: var(--tinta); color: #fff; }
+
+.link {
+  background: none;
+  border: 0;
+  color: var(--tinta-fraca);
+  font: 16px/1 inherit;
+  text-decoration: underline;
+  padding: 14px 4px;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
+/* ---- primeira execucao ---- */
+.passos { padding-left: 20px; margin: 0 0 22px; }
+.passos li { margin-bottom: 22px; }
+.passos strong { display: block; font-size: 18px; }
+.nota { display: block; color: var(--tinta-fraca); font-size: 15px; margin: 4px 0 10px; }
+.confere { display: block; font-size: 17px; margin-top: 8px; }
+.confere input { width: 22px; height: 22px; vertical-align: -4px; margin-right: 6px; }
+#btn-comecar { width: 100%; }
+
+/* ---- medicao ---- */
+#medicao-resumo { font-size: 17px; }
+#medicao-lista { flex: 1; margin-top: 14px; }
+.dia-bloco { margin-bottom: 16px; }
+.dia-bloco h2 { font-size: 15px; font-weight: 800; color: var(--tinta-fraca); margin: 0 0 6px; }
+.reg {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  border-left: 5px solid var(--linha);
+  background: #f9fafb;
+  margin-bottom: 5px;
+  font-size: 15px;
+}
+.reg b { font-variant-numeric: tabular-nums; }
+.reg.sw { border-left-color: var(--ok); }
+.reg.app { border-left-color: var(--marca); }
+.reg.ausente { border-left-color: var(--alerta); }
+.reg.erro { border-left-color: var(--alerta); background: #fef2f2; }
+
+.aviso-toque {
+  position: fixed;
+  left: 16px; right: 16px;
+  bottom: calc(20px + var(--base));
+  background: var(--tinta);
+  color: #fff;
+  font-weight: 700;
+  padding: 16px;
+  border-radius: 12px;
+  text-align: center;
+  z-index: 10;
+}

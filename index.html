@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#d97706">
+<title>Agenda</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icone-192.png">
+<link rel="apple-touch-icon" href="./icone-192.png">
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+
+<!-- ============ primeira execucao ============ -->
+<section id="tela-primeira" class="tela" hidden>
+  <h1>Uma vez só</h1>
+  <p class="lead">Três coisas para o app conseguir te interromper. Depois disso ele não pede mais nada.</p>
+
+  <ol class="passos">
+    <li>
+      <strong>Avisar nos três horários</strong>
+      <span class="nota">07:00, 13:00 e 16:40, de segunda a sexta.</span>
+      <button id="btn-permitir" class="acao">Ativar avisos</button>
+      <span id="estado-permissao" class="estado"></span>
+    </li>
+    <li>
+      <strong>Guardar os dados de verdade</strong>
+      <span class="nota">Impede o Android de apagar tudo quando o aparelho encher.</span>
+      <span id="estado-persistencia" class="estado"></span>
+    </li>
+    <li>
+      <strong>Tirar a restrição de bateria</strong>
+      <span class="nota">
+        Ajustes → Apps → Agenda → Economia de bateria → <b>Sem restrições</b>.<br>
+        Depois abra a multitarefa e <b>tranque</b> o app (cadeado).<br>
+        Sem isso o HyperOS mata o app e o aviso some em poucos dias.
+      </span>
+      <label class="confere"><input type="checkbox" id="chk-bateria"> Já fiz</label>
+    </li>
+  </ol>
+
+  <button id="btn-comecar" class="acao principal">Começar</button>
+</section>
+
+<!-- ============ abertura ============ -->
+<section id="tela-abertura" class="tela" hidden>
+  <div id="faixa-ritual" class="faixa" hidden></div>
+
+  <div class="duplo">
+    <button id="btn-anotar" class="gigante">ANOTAR</button>
+    <button id="btn-onde" class="gigante secundario">ONDE<br>ESTOU</button>
+  </div>
+
+  <div class="painel">
+    <p id="info-triagem">—</p>
+    <p class="sussurro" id="info-etapa">Esqueleto do Dia&nbsp;0 — só captura e relógio.</p>
+  </div>
+
+  <button id="btn-medicao" class="link">medição do gatilho</button>
+</section>
+
+<!-- ============ anotar ============ -->
+<section id="tela-anotar" class="tela" hidden>
+  <textarea id="campo" rows="6" autocomplete="off" autocorrect="on"
+            spellcheck="false" enterkeyhint="done" placeholder="…"></textarea>
+  <div class="rodape">
+    <button id="btn-voltar-anotar" class="link">cancelar</button>
+    <button id="btn-salvar" class="acao principal">SALVAR</button>
+  </div>
+</section>
+
+<!-- ============ onde estou (esqueleto) ============ -->
+<section id="tela-onde" class="tela" hidden>
+  <h1>Onde estou</h1>
+  <div class="contextos">
+    <button class="gigante secundario" disabled>COMPUTADOR</button>
+    <button class="gigante secundario" disabled>CAMPO</button>
+    <button class="gigante secundario" disabled>TELEFONE / PESSOA</button>
+  </div>
+  <p class="sussurro">As listas entram na Etapa 1, depois da triagem.
+     Aqui só o alcance do polegar está sendo testado.</p>
+  <button class="link voltar">voltar</button>
+</section>
+
+<!-- ============ ritual (esqueleto instrumentado) ============ -->
+<section id="tela-ritual" class="tela" hidden>
+  <h1 id="ritual-titulo">Ritual</h1>
+  <p class="lead" id="ritual-corpo"></p>
+  <p class="sussurro">Os passos do ritual entram na Etapa 1. O que está sendo medido
+     aqui é se você chegou nesta tela — e com quanto atraso.</p>
+  <button class="link voltar">voltar</button>
+</section>
+
+<!-- ============ medicao ============ -->
+<section id="tela-medicao" class="tela" hidden>
+  <h1>Medição do gatilho</h1>
+  <p class="lead" id="medicao-resumo">—</p>
+  <p class="sussurro">Critério fechado antes de medir:
+     <b>13 dos 15</b> disparos da semana precisam sair sozinhos, com até
+     <b>15 min</b> de atraso. Abaixo disso, Plano&nbsp;B.</p>
+  <div id="medicao-lista"></div>
+  <div class="rodape">
+    <button class="link voltar">voltar</button>
+    <button id="btn-copiar" class="acao">Copiar relatório</button>
+  </div>
+</section>
+
+<script src="./nucleo.js"></script>
+<script src="./app.js"></script>
+</body>
+</html>
