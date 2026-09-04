@@ -105,7 +105,39 @@ console.log('\n8. indicador de idade');
   conf('limite do alerta', N.IDADE_ALERTA, 14);
 }
 
-console.log('\n9. ordenar nao altera a lista original');
+console.log('\n9. as 3 do dia e a virada da meia-noite');
+{
+  const hoje = p('hoje', { prioridade: { ehTop3: true, data: '2026-09-09' } });
+  const ontem = p('ontem', { prioridade: { ehTop3: true, data: '2026-09-08' } });
+  const nunca = p('nunca');
+  conf('marcada hoje vale', N.ehTop3(hoje, QUARTA), true);
+  conf('marcada ontem nao vale hoje', N.ehTop3(ontem, QUARTA), false);
+  conf('sem marca', N.ehTop3(nunca, QUARTA), false);
+
+  // o mesmo item, um dia depois: a marca expira sozinha, sem ninguem limpar
+  conf('a de hoje expira amanha', N.ehTop3(hoje, QUINTA), false);
+
+  // prioridade quebrada (item antigo, campo faltando) nao pode derrubar nada
+  conf('prioridade ausente', N.ehTop3({ criadoEm: 'x' }, QUARTA), false);
+  conf('prioridade nula', N.ehTop3({ prioridade: null }, QUARTA), false);
+  conf('ehTop3 sem data', N.ehTop3({ prioridade: { ehTop3: true } }, QUARTA), false);
+}
+
+console.log('\n10. trocar uma das 3 nao pode apagar a que ja saiu');
+{
+  const D = N.definidasAposTroca;
+  // escolheu A, B, C; concluiu A; trocou C por D
+  conf('a concluida continua definida', D(['B', 'D'], ['A']), ['B', 'D', 'A']);
+  conf('placar do dia', D(['B', 'D'], ['A']).length, 3);
+
+  conf('nada concluido ainda', D(['A', 'B', 'C'], []), ['A', 'B', 'C']);
+  conf('nao duplica a que segue marcada', D(['A', 'B'], ['A']), ['A', 'B']);
+  conf('tirou tudo, sobra o que ja saiu', D([], ['A', 'B']), ['A', 'B']);
+  conf('as tres sairam', D([], ['A', 'B', 'C']).length, 3);
+  conf('tolera campos ausentes', D(null, null), []);
+}
+
+console.log('\n11. ordenar nao altera a lista original');
 {
   const original = [p('b'), p('a', { criadoEm: '2026-08-01T08:00:00.000Z' })];
   N.ordenar(original, QUARTA);

@@ -57,6 +57,10 @@
     <p class="sussurro" id="info-etapa"></p>
   </div>
 
+  <div id="home-cabecalho" class="cabecalho-lista" hidden>
+    <span id="home-placar"></span>
+    <button id="btn-escolher3" class="link">escolher</button>
+  </div>
   <div id="home-lista"></div>
 
   <button id="btn-medicao" class="link">medição do gatilho</button>
@@ -136,6 +140,17 @@
   <button id="btn-salvar-triagem" class="acao principal larga" hidden>SALVAR</button>
 
   <button class="link voltar">sair, continuo depois</button>
+</section>
+
+<!-- ============ escolher as 3 do dia (spec 5.4 passo 4) ============ -->
+<section id="tela-escolher" class="tela" hidden>
+  <h1>As 3 do dia</h1>
+  <p class="lead" id="escolher-contador"></p>
+  <div id="escolher-lista"></div>
+  <div class="rodape">
+    <button class="link voltar">cancelar</button>
+    <button id="btn-confirmar3" class="acao principal">PRONTO</button>
+  </div>
 </section>
 
 <!-- ============ medicao ============ -->

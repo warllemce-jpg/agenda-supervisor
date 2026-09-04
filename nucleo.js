@@ -238,11 +238,18 @@
   var IDADE_ALERTA = 14;      // a partir daqui a lista mostra a idade do item
   var AVISO_PRAZO_DIAS = 2;   // item com data entra na ordenacao 2 dias antes
 
-  function pesoOrdem(p, agora) {
-    var hoje = dataISO(agora);
+  /* "As 3 do dia valem so para aquele dia. Nao sobrevivem a virada sem passar
+     pelo ritual" (secao 6). A marca fica gravada no item com a data em que foi
+     dada; virou o dia, ela deixa de valer sozinha, sem ninguem precisar limpar
+     nada. Uma marca de ontem encontrada hoje e simplesmente ignorada. */
+  function ehTop3(p, agora) {
+    return !!(p.prioridade && p.prioridade.ehTop3
+              && p.prioridade.data === dataISO(agora));
+  }
 
-    // 1. as 3 do dia — e so as de hoje: nao sobrevivem a virada (secao 6)
-    if (p.prioridade && p.prioridade.ehTop3 && p.prioridade.data === hoje) return 0;
+  function pesoOrdem(p, agora) {
+    // 1. as 3 do dia — e so as de hoje
+    if (ehTop3(p, agora)) return 0;
 
     // 2. prazo chegando, ou ja vencido
     if (p.prazo && p.prazo.tipo === 'data' && p.prazo.data) {
@@ -272,6 +279,20 @@
 
   function idadeDias(p, agora) {
     return Math.floor((agora - new Date(p.criadoEm)) / 86400000);
+  }
+
+  /* Quais sao "as 3 do dia" depois de uma troca (spec 5.5 passo 4).
+
+     A tela de troca so mostra o que ainda esta ativo, entao uma das 3 que ja foi
+     concluida nao aparece nela e nao entra na nova selecao. Se o registro do dia
+     virasse so a selecao, essa concluida sumiria — e o placar mostraria menos do
+     que ele entregou. Ela nao ocupa mais decisao nenhuma, mas continua definida
+     para o dia. */
+  function definidasAposTroca(selecao, jaConcluidas) {
+    var fora = (jaConcluidas || []).filter(function (id) {
+      return (selecao || []).indexOf(id) === -1;
+    });
+    return (selecao || []).concat(fora);
   }
 
   /* ---------- numero concreto para a notificacao ----------
@@ -309,6 +330,6 @@
     chaveRitual: chaveRitual, logDoRitual: logDoRitual,
     varrer: varrer, contarTriagem: contarTriagem, textoNotificacao: textoNotificacao,
     IDADE_ALERTA: IDADE_ALERTA, AVISO_PRAZO_DIAS: AVISO_PRAZO_DIAS,
-    pesoOrdem: pesoOrdem, ordenar: ordenar, idadeDias: idadeDias
+    pesoOrdem: pesoOrdem, ordenar: ordenar, idadeDias: idadeDias, ehTop3: ehTop3, definidasAposTroca: definidasAposTroca
   };
 })(typeof self !== 'undefined' ? self : this);

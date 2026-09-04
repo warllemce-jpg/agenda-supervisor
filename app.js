@@ -11,7 +11,7 @@ const tela = (id) => document.getElementById('tela-' + id);
 const el = (id) => document.getElementById(id);
 
 const TELAS = ['primeira', 'abertura', 'anotar', 'onde', 'lista',
-               'ritual', 'triagem', 'medicao'];
+               'ritual', 'triagem', 'escolher', 'medicao'];
 let telaAtual = null;
 
 /* Toda leitura de elemento aqui tolera o elemento nao existir.
@@ -233,15 +233,18 @@ async function registrarSyncPeriodico() {
    cima. A ordem e a da spec: o que saiu primeiro, a fila depois. */
 async function pintarAbertura() {
   const hoje = Nucleo.dataISO(new Date());
-  const historico = await Nucleo.lerTudo('historico');
-  const dia = historico.find((h) => h.data === hoje);
-  const feitas = dia ? dia.concluidas.length : 0;
+  const dia = await lerDia(hoje);
+  const feitas = dia.concluidas.length;
   const naFila = await Nucleo.contarTriagem();
 
   com('info-triagem', (x) => {
-    x.textContent = feitas === 0
+    const base = feitas === 0
       ? 'Nada concluído hoje ainda.'
       : feitas + (feitas === 1 ? ' concluída hoje' : ' concluídas hoje');
+    // Placar das 3, so quando ha 3 definidas. Sem elas, o numero seria ruido.
+    x.textContent = dia.top3Definidas.length
+      ? base + '  ·  ' + dia.top3Concluidas.length + ' de ' + dia.top3Definidas.length + ' do dia'
+      : base;
   });
   com('info-etapa', (x) => {
     x.textContent = naFila === 0
@@ -268,6 +271,13 @@ async function pintarHome() {
   const agora = new Date();
   const ativas = todas.filter((p) => p.status === 'ativa');
   const lista = Nucleo.ordenar(ativas, agora);
+
+  const escolhidas = lista.filter((p) => Nucleo.ehTop3(p, agora)).length;
+  com('home-cabecalho', (x) => { x.hidden = lista.length === 0; });
+  com('home-placar', (x) => {
+    x.textContent = escolhidas === 0 ? 'as 3 do dia' : escolhidas + ' do dia escolhidas';
+  });
+  com('btn-escolher3', (x) => { x.textContent = escolhidas === 0 ? 'escolher' : 'trocar'; });
 
   alvo.innerHTML = '';
   if (!lista.length) {
@@ -451,12 +461,22 @@ async function pintarLista() {
    opcoes.repintar   — o que redesenhar depois de concluir, desfazer ou editar */
 function linhaDoItem(p, agora, opcoes) {
   opcoes = opcoes || {};
+  const top3 = Nucleo.ehTop3(p, agora);
   const item = document.createElement('div');
-  item.className = 'item' + (p.origem === 'terceiro' ? ' terceiro' : '');
+  item.className = 'item'
+    + (p.origem === 'terceiro' ? ' terceiro' : '')
+    + (top3 ? ' top3' : '');
 
   const corpo = document.createElement('div');
   corpo.className = 'item-corpo';
   corpo.addEventListener('click', () => abrirTriagemDe(p.id, opcoes.repintar));
+
+  if (top3) {
+    const tarja = document.createElement('span');
+    tarja.className = 'tarja3';
+    tarja.textContent = 'HOJE';
+    corpo.appendChild(tarja);
+  }
 
   const txt = document.createElement('p');
   txt.className = 'item-txt';
@@ -561,17 +581,31 @@ async function desfazerConclusao(id, repintar) {
    Sem gravar aqui, no momento da conclusao, nao ha como montar depois: a lista
    de concluidas do dia nao pode ser reconstruida a partir das pendencias, que
    so guardam o estado final. */
-async function registrarNoHistorico(p, agora) {
-  const dia = Nucleo.dataISO(agora);
+async function lerDia(data) {
   const todos = await Nucleo.lerTudo('historico');
-  const registro = todos.find((h) => h.data === dia)
-    || { data: dia, concluidas: [], top3Definidas: [], top3Concluidas: [], descartadas: 0 };
+  const achado = todos.find((h) => h.data === data);
+  if (achado) {
+    // Registros gravados antes de as 3 do dia existirem nao tem estes campos.
+    achado.top3Definidas = achado.top3Definidas || [];
+    achado.top3Concluidas = achado.top3Concluidas || [];
+    return achado;
+  }
+  return { data: data, concluidas: [], top3Definidas: [], top3Concluidas: [], descartadas: 0 };
+}
+
+async function registrarNoHistorico(p, agora) {
+  const registro = await lerDia(Nucleo.dataISO(agora));
 
   if (registro.concluidas.some((c) => c.id === p.id)) return;   // nao conta duas vezes
   registro.concluidas.push({
     id: p.id, texto: p.texto, origem: p.origem,
     contexto: p.contexto, tipo: 'pendencia'
   });
+
+  if (Nucleo.ehTop3(p, agora) && registro.top3Concluidas.indexOf(p.id) === -1) {
+    registro.top3Concluidas.push(p.id);
+  }
+
   await Nucleo.gravar('historico', registro);
 }
 
@@ -579,12 +613,147 @@ async function registrarNoHistorico(p, agora) {
    23h58 e desfazer as 00h02 tem que apagar do dia certo, senao o contador do dia
    anterior fica com um item que nao existe mais. */
 async function removerDoHistorico(id, quando) {
-  const dia = Nucleo.dataISO(quando);
-  const todos = await Nucleo.lerTudo('historico');
-  const registro = todos.find((h) => h.data === dia);
-  if (!registro) return;
+  const registro = await lerDia(Nucleo.dataISO(quando));
   registro.concluidas = registro.concluidas.filter((c) => c.id !== id);
+  registro.top3Concluidas = registro.top3Concluidas.filter((x) => x !== id);
   await Nucleo.gravar('historico', registro);
+}
+
+/* =====================================================================
+   4c. As 3 do dia (spec 5.4 passo 4, decisao 11, secao 6)
+
+   Tres, e nao uma lista de prioridades: o problema que abriu o projeto e chegar
+   ao fim do dia sem saber o que se fez, e uma lista longa de "importantes" nao
+   responde isso. Tres cabem na cabeca.
+
+   Valem so hoje. Nao ha rotina de limpeza noturna — a marca carrega a data em
+   que foi dada e simplesmente para de valer (Nucleo.ehTop3).
+   ===================================================================== */
+
+const MAX_TOP3 = 3;
+let selecao = [];
+
+/* As 3 do dia que JA foram concluidas hoje. Elas nao aparecem nesta tela — ja
+   sairam, nao ha o que trocar — mas continuam ocupando vaga e continuam
+   contando no placar do dia. Sem guardar isso aqui, concluir uma das 3 e
+   depois trocar outra apagaria a concluida do registro, e o placar mostraria
+   menos do que ele entregou de verdade. */
+let top3Travadas = [];
+
+async function abrirEscolha() {
+  const todas = await Nucleo.lerTudo('pendencias');
+  const agora = new Date();
+  const hoje = Nucleo.dataISO(agora);
+  const ativas = Nucleo.ordenar(todas.filter((p) => p.status === 'ativa'), agora);
+
+  const dia = await lerDia(hoje);
+  top3Travadas = dia.top3Concluidas.slice();
+
+  if (!ativas.length) {
+    toque(top3Travadas.length ? 'Tudo do dia já saiu.' : 'Nada triado para escolher.');
+    return;
+  }
+
+  // Já escolhidas hoje vêm marcadas: esta mesma tela serve para trocar uma que
+  // claramente não vai sair (spec 5.5 passo 4), sem penalidade nem alerta.
+  selecao = ativas.filter((p) => Nucleo.ehTop3(p, agora)).map((p) => p.id);
+
+  const alvo = el('escolher-lista');
+  if (!alvo) return;
+  alvo.innerHTML = '';
+  ativas.forEach((p) => alvo.appendChild(linhaDeEscolha(p, agora)));
+
+  atualizarContador();
+  mostrar('escolher');
+}
+
+function vagas() {
+  return MAX_TOP3 - top3Travadas.length;
+}
+
+function linhaDeEscolha(p, agora) {
+  const b = document.createElement('button');
+  b.className = 'escolha' + (selecao.indexOf(p.id) !== -1 ? ' marcada' : '');
+  b.dataset.id = p.id;
+
+  const marca = document.createElement('span');
+  marca.className = 'marca';
+  marca.textContent = '✓';
+  b.appendChild(marca);
+
+  const txt = document.createElement('span');
+  txt.className = 'txt';
+  const forte = document.createElement('b');
+  forte.textContent = p.texto;
+  txt.appendChild(forte);
+
+  const meta = document.createElement('span');
+  const partes = [p.origem === 'terceiro' ? 'de terceiro' : 'minha',
+                  NOME_CONTEXTO[p.contexto] || p.contexto];
+  if (p.prazo && p.prazo.tipo === 'data' && p.prazo.data) partes.push('vence ' + dataCurta(p.prazo.data));
+  else if (p.prazo && p.prazo.tipo === 'semana') partes.push('esta semana');
+  meta.textContent = partes.join(' · ');
+  txt.appendChild(meta);
+
+  b.appendChild(txt);
+  b.addEventListener('click', () => alternarEscolha(p.id, b));
+  return b;
+}
+
+function alternarEscolha(id, botao) {
+  const i = selecao.indexOf(id);
+  if (i !== -1) {
+    selecao.splice(i, 1);
+    botao.classList.remove('marcada');
+  } else {
+    if (selecao.length >= vagas()) {
+      toque(vagas() === 0 ? 'As 3 de hoje já saíram.' : 'Toque numa marcada para tirar.');
+      return;
+    }
+    selecao.push(id);
+    botao.classList.add('marcada');
+  }
+  atualizarContador();
+}
+
+function atualizarContador() {
+  const jaSairam = top3Travadas.length;
+  com('escolher-contador', (x) => {
+    if (vagas() === 0) {
+      x.textContent = 'As 3 de hoje já saíram. Amanhã tem três novas.';
+      return;
+    }
+    const sufixo = jaSairam ? '  (' + jaSairam + ' já saiu hoje)' : '';
+    x.textContent = (selecao.length === 0
+      ? 'Escolha até ' + vagas() + '. Valem só hoje.'
+      : selecao.length + ' de ' + vagas() + ' escolhidas.') + sufixo;
+  });
+}
+
+async function confirmarEscolha() {
+  const agora = new Date();
+  const hoje = Nucleo.dataISO(agora);
+  const todas = await Nucleo.lerTudo('pendencias');
+
+  for (const p of todas) {
+    if (p.status !== 'ativa') continue;
+    const marcada = selecao.indexOf(p.id) !== -1;
+    const eraMarcada = Nucleo.ehTop3(p, agora);
+    if (marcada === eraMarcada) continue;          // nada mudou, nao regrava
+    p.prioridade = marcada ? { ehTop3: true, data: hoje }
+                           : { ehTop3: false, data: null };
+    await Nucleo.gravar('pendencias', p);
+  }
+
+  const dia = await lerDia(hoje);
+  // top3Concluidas nao se mexe — apagar de la seria apagar trabalho feito.
+  dia.top3Definidas = Nucleo.definidasAposTroca(selecao, dia.top3Concluidas);
+  await Nucleo.gravar('historico', dia);
+
+  await pintarAbertura();
+  mostrar('abertura');
+  const n = selecao.length;
+  toque(n === 0 ? 'Nenhuma escolhida.' : n + (n === 1 ? ' escolhida.' : ' escolhidas.'));
 }
 
 /* =====================================================================
@@ -901,6 +1070,8 @@ function ligarTudo() {
   ligar('btn-copiar', 'click', copiarRelatorio);
   ligar('btn-triar', 'click', abrirTriagem);
   ligar('btn-salvar-triagem', 'click', salvarEdicao);
+  ligar('btn-escolher3', 'click', abrirEscolha);
+  ligar('btn-confirmar3', 'click', confirmarEscolha);
   ligar('btn-ritual-teste', 'click', () => abrirRitual('abertura'));
 
   ligarGrupo('triagem-contexto', 'contexto');
