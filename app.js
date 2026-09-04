@@ -264,6 +264,8 @@ async function pintarAbertura() {
    Mistura os tres contextos, por isso cada linha diz de qual e — o "onde estou"
    continua sendo o caminho para filtrar quando ele esta num lugar so. */
 async function pintarHome() {
+  await pintarRotinasHome();
+
   const alvo = el('home-lista');
   if (!alvo) return;
 
@@ -292,6 +294,22 @@ async function pintarHome() {
 
   lista.forEach((p) => alvo.appendChild(
     linhaDoItem(p, agora, { contexto: true, repintar: pintarAbertura })
+  ));
+}
+
+/* As rotinas vem ANTES das pendencias na tela, como no roteiro do ritual da
+   manha (spec 5.4: rotinas no passo 2, as 3 do dia so no passo 4). A lista e
+   curta e se esvazia sozinha ao longo do dia; a de pendencias e longa e rola. */
+async function pintarRotinasHome() {
+  const alvo = el('home-rotinas');
+  if (!alvo) return;
+
+  const devidas = await rotinasDeHoje(null);
+  com('home-cab-rotinas', (x) => { x.hidden = devidas.length === 0; });
+
+  alvo.innerHTML = '';
+  devidas.forEach((r) => alvo.appendChild(
+    linhaDeRotina(r, { contexto: true, repintar: pintarAbertura })
   ));
 }
 
@@ -433,17 +451,34 @@ async function abrirLista(contexto) {
   await pintarLista();
 }
 
+/* A spec 5.3 fala so em "pendencias ativas daquele contexto". As rotinas entram
+   aqui tambem porque elas TEM contexto no modelo de dados, e "Passar na frente
+   de servico" e contexto campo — nao mostra-la quando ele diz que esta no campo
+   seria esconder a unica coisa que ele com certeza vai fazer ali. Separadas por
+   cabecalho, para os dois tipos nao se confundirem. */
 async function pintarLista() {
   const alvo = el('lista-itens');
   if (!alvo) return;
 
-  const todas = await Nucleo.lerTudo('pendencias');
   const agora = new Date();
+  const todas = await Nucleo.lerTudo('pendencias');
   const ativas = todas.filter((p) => p.status === 'ativa' && p.contexto === contextoAberto);
   const lista = Nucleo.ordenar(ativas, agora);
+  const devidas = await rotinasDeHoje(contextoAberto);
+
+  const areaRotinas = el('lista-rotinas');
+  if (areaRotinas) {
+    areaRotinas.innerHTML = '';
+    devidas.forEach((r) => areaRotinas.appendChild(
+      linhaDeRotina(r, { contexto: false, repintar: pintarLista })
+    ));
+  }
+  com('lista-cab-rotinas', (x) => { x.hidden = devidas.length === 0; });
+  com('lista-cab-pend', (x) => { x.hidden = devidas.length === 0 || lista.length === 0; });
 
   alvo.innerHTML = '';
   if (!lista.length) {
+    if (devidas.length) return;   // as rotinas ja preenchem a tela
     const vazio = document.createElement('p');
     vazio.className = 'vazio';
     vazio.textContent = 'Nada aqui.';
@@ -616,6 +651,111 @@ async function removerDoHistorico(id, quando) {
   const registro = await lerDia(Nucleo.dataISO(quando));
   registro.concluidas = registro.concluidas.filter((c) => c.id !== id);
   registro.top3Concluidas = registro.top3Concluidas.filter((x) => x !== id);
+  await Nucleo.gravar('historico', registro);
+}
+
+/* =====================================================================
+   4b-bis. Rotinas (decisao 6, decisao 19, spec 5.4 passo 2)
+
+   O segundo e ultimo tipo. Nao tem prazo, nao tem origem — rotina e sempre
+   trabalho dele — e nao entra nas 3 do dia: ela ja e o piso do dia, nao a
+   escolha do dia.
+
+   Cumprir grava a data em ultimaExecucao. E so isso que faz a rotina sumir da
+   lista e nao poder ser cumprida duas vezes (caso do testador).
+   ===================================================================== */
+
+const DIAS_NOME = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+
+function descreverFrequencia(r) {
+  if (r.frequencia === 'diaria') return 'todo dia';
+  if (r.frequencia === 'semanal') return 'toda ' + (DIAS_NOME[r.diaSemana] || '—');
+  if (r.frequencia === 'mensal') return 'todo dia ' + r.diaMes;
+  return r.frequencia;
+}
+
+async function rotinasDeHoje(contexto) {
+  const todas = await Nucleo.lerTudo('rotinas');
+  const agora = new Date();
+  return todas.filter((r) => Nucleo.rotinaVenceHoje(r, agora)
+                          && (!contexto || r.contexto === contexto));
+}
+
+function linhaDeRotina(r, opcoes) {
+  opcoes = opcoes || {};
+  const item = document.createElement('div');
+  item.className = 'item rotina';
+
+  const corpo = document.createElement('div');
+  corpo.className = 'item-corpo';
+
+  const txt = document.createElement('p');
+  txt.className = 'item-txt';
+  txt.textContent = r.texto;
+  corpo.appendChild(txt);
+
+  const meta = document.createElement('p');
+  meta.className = 'item-meta';
+  const partes = ['rotina', descreverFrequencia(r)];
+  if (opcoes.contexto) partes.push(NOME_CONTEXTO[r.contexto] || r.contexto);
+  meta.textContent = partes.join(' · ');
+  corpo.appendChild(meta);
+
+  item.appendChild(corpo);
+
+  const ok = document.createElement('button');
+  ok.className = 'concluir';
+  ok.textContent = '✓';
+  ok.setAttribute('aria-label', 'cumprir');
+  ok.addEventListener('click', () => cumprirRotina(r.id, opcoes.repintar));
+  item.appendChild(ok);
+
+  return item;
+}
+
+let cumprindo = false;
+
+async function cumprirRotina(id, repintar) {
+  if (cumprindo) return;
+  cumprindo = true;
+  try {
+    const todas = await Nucleo.lerTudo('rotinas');
+    const r = todas.find((x) => x.id === id);
+    const agora = new Date();
+    if (!r || !Nucleo.rotinaVenceHoje(r, agora)) return;
+
+    const anterior = r.ultimaExecucao;
+    r.ultimaExecucao = Nucleo.dataISO(agora);
+    await Nucleo.gravar('rotinas', r);
+    await registrarRotinaNoHistorico(r, agora);
+
+    await (repintar || pintarAbertura)();
+    toqueComAcao('Feito.', 'desfazer', () => desfazerRotina(id, anterior, agora, repintar));
+  } finally {
+    cumprindo = false;
+  }
+}
+
+async function desfazerRotina(id, anterior, quando, repintar) {
+  const todas = await Nucleo.lerTudo('rotinas');
+  const r = todas.find((x) => x.id === id);
+  if (!r) return;
+
+  r.ultimaExecucao = anterior;   // volta ao que era, nao a null
+  await Nucleo.gravar('rotinas', r);
+  await removerDoHistorico(id, quando);
+
+  await (repintar || pintarAbertura)();
+  toque('Voltou para a lista.');
+}
+
+async function registrarRotinaNoHistorico(r, agora) {
+  const registro = await lerDia(Nucleo.dataISO(agora));
+  if (registro.concluidas.some((c) => c.id === r.id)) return;
+  registro.concluidas.push({
+    id: r.id, texto: r.texto, origem: 'minha',
+    contexto: r.contexto, tipo: 'rotina'
+  });
   await Nucleo.gravar('historico', registro);
 }
 

@@ -114,6 +114,17 @@ h1 { font-size: 26px; font-weight: 800; margin: 4px 0 12px; }
 .cabecalho-lista[hidden] { display: none; }
 .cabecalho-lista .link { padding: 8px 4px; text-transform: none; letter-spacing: 0; }
 
+/* Rotina nao e pendencia (decisao 6: sao os dois unicos tipos). A borda tracejada
+   diz isso sem uma linha de texto: nao e uma coisa que ficou pendente, e uma que
+   volta sempre. Nao tem origem — rotina e sempre trabalho dele. */
+.item.rotina {
+  border-style: dashed;
+  border-left-style: solid;
+  border-left-color: var(--tinta-fraca);
+}
+.item.rotina .item-corpo { cursor: default; }
+.item.rotina .item-corpo:active { background: none; }
+
 /* As 3 do dia. Ja vem primeiro na ordem (decisao 11); a tarja diz por que.
    Sem cor propria: usar vermelho ou verde aqui viraria cobranca, e a spec e
    explicita em nao cobrar (decisao 17). */

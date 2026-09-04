@@ -281,6 +281,25 @@
     return Math.floor((agora - new Date(p.criadoEm)) / 86400000);
   }
 
+  /* ---------- rotinas ----------
+
+     "Rotinas que vencem hoje" (spec 5.4 passo 2). Tres regras, e a terceira e a
+     que resolve o caso do testador (rotina concluida duas vezes no mesmo dia):
+     cumprida hoje, ela deixa de vencer hoje, some da lista e nao ha segundo
+     toque possivel.
+
+     Rotina nao se acumula. Semanal de sexta que passou em branco nao reaparece
+     no sabado nem na segunda — ela simplesmente nao foi cumprida naquela semana,
+     e e isso que o relatorio mensal mede em "cumpridas sobre devidas". */
+  function rotinaVenceHoje(r, agora) {
+    if (!r || !ehDiaUtil(agora)) return false;      // ele nao trabalha fim de semana
+    if (r.ultimaExecucao === dataISO(agora)) return false;
+    if (r.frequencia === 'diaria') return true;
+    if (r.frequencia === 'semanal') return agora.getDay() === r.diaSemana;
+    if (r.frequencia === 'mensal') return agora.getDate() === r.diaMes;
+    return false;
+  }
+
   /* Quais sao "as 3 do dia" depois de uma troca (spec 5.5 passo 4).
 
      A tela de troca so mostra o que ainda esta ativo, entao uma das 3 que ja foi
@@ -330,6 +349,7 @@
     chaveRitual: chaveRitual, logDoRitual: logDoRitual,
     varrer: varrer, contarTriagem: contarTriagem, textoNotificacao: textoNotificacao,
     IDADE_ALERTA: IDADE_ALERTA, AVISO_PRAZO_DIAS: AVISO_PRAZO_DIAS,
-    pesoOrdem: pesoOrdem, ordenar: ordenar, idadeDias: idadeDias, ehTop3: ehTop3, definidasAposTroca: definidasAposTroca
+    pesoOrdem: pesoOrdem, ordenar: ordenar, idadeDias: idadeDias, ehTop3: ehTop3, definidasAposTroca: definidasAposTroca,
+    rotinaVenceHoje: rotinaVenceHoje
   };
 })(typeof self !== 'undefined' ? self : this);
