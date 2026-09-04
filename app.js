@@ -13,10 +13,29 @@ const el = (id) => document.getElementById(id);
 const TELAS = ['primeira', 'abertura', 'anotar', 'onde', 'ritual', 'triagem', 'medicao'];
 let telaAtual = null;
 
+/* Toda leitura de elemento aqui tolera o elemento nao existir.
+
+   Motivo, aprendido na marra: o service worker atualiza os arquivos um a um,
+   entao existe uma janela em que o app.js novo roda com o index.html velho. Se
+   o codigo novo procurar uma tela que ainda nao existe no HTML e estourar, o
+   app nao desenha NADA — tela branca, sem botao, sem saida. Melhor um botao que
+   ainda nao funciona do que um app que nao abre. */
+
 function mostrar(nome) {
-  TELAS.forEach((t) => { tela(t).hidden = (t !== nome); });
+  TELAS.forEach((t) => { const s = tela(t); if (s) s.hidden = (t !== nome); });
   telaAtual = nome;
   window.scrollTo(0, 0);
+}
+
+// Executa fn(elemento) so se o elemento existir.
+function com(id, fn) {
+  const alvo = el(id);
+  if (!alvo) { console.warn('elemento ausente (versao em transicao):', id); return; }
+  fn(alvo);
+}
+
+function ligar(id, evento, fn) {
+  com(id, (alvo) => alvo.addEventListener(evento, fn));
 }
 
 function toque(msg) {
@@ -276,11 +295,13 @@ async function abrirRitual(id) {
   await Nucleo.escreverConfig('ultimoRitualAberto', chave);
 
   const naFila = await Nucleo.contarTriagem();
-  el('triar-quantas').textContent = naFila ? '(' + naFila + ')' : '';
-  el('btn-triar').disabled = naFila === 0;
-  el('ritual-restante').textContent = naFila === 0
-    ? 'Nada para triar. Os outros passos do ritual entram em seguida.'
-    : 'Os outros passos do ritual entram em seguida.';
+  com('triar-quantas', (x) => { x.textContent = naFila ? '(' + naFila + ')' : ''; });
+  com('btn-triar', (x) => { x.disabled = naFila === 0; });
+  com('ritual-restante', (x) => {
+    x.textContent = naFila === 0
+      ? 'Nada para triar. Os outros passos do ritual entram em seguida.'
+      : 'Os outros passos do ritual entram em seguida.';
+  });
 
   mostrar('ritual');
 }
@@ -329,20 +350,21 @@ function pintarItem() {
   const p = fila[posicao];
   escolha = { contexto: null, origem: null, prazo: null, data: null };
 
-  el('triagem-progresso').textContent = (posicao + 1) + ' de ' + fila.length;
-  el('triagem-texto').textContent = p.texto;
+  com('triagem-progresso', (x) => { x.textContent = (posicao + 1) + ' de ' + fila.length; });
+  com('triagem-texto', (x) => { x.textContent = p.texto; });
 
   document.querySelectorAll('#tela-triagem .opcoes button')
     .forEach((b) => b.classList.remove('escolhido'));
-  el('triagem-data').hidden = true;
-  el('triagem-data').value = '';
+  com('triagem-data', (x) => { x.hidden = true; x.value = ''; });
 }
 
 function ligarGrupo(id, campo) {
-  el(id).addEventListener('click', (ev) => {
+  const grupo = el(id);
+  if (!grupo) return;
+  grupo.addEventListener('click', (ev) => {
     const b = ev.target.closest('button');
     if (!b) return;
-    el(id).querySelectorAll('button').forEach((x) => x.classList.remove('escolhido'));
+    grupo.querySelectorAll('button').forEach((x) => x.classList.remove('escolhido'));
     b.classList.add('escolhido');
     escolha[campo] = b.dataset.v;
 
@@ -506,37 +528,43 @@ async function copiarRelatorio() {
    8. Ligacoes
    ===================================================================== */
 
-el('btn-anotar').addEventListener('click', abrirAnotar);
-el('btn-salvar').addEventListener('click', salvarAnotacao);
-el('btn-voltar-anotar').addEventListener('click', async () => {
-  el('campo').blur();
-  await pintarAbertura();
-  mostrar('abertura');
-});
-el('btn-onde').addEventListener('click', () => mostrar('onde'));
-el('btn-medicao').addEventListener('click', async () => {
-  await pintarMedicao();
-  mostrar('medicao');
-});
-el('btn-copiar').addEventListener('click', copiarRelatorio);
-el('btn-triar').addEventListener('click', abrirTriagem);
-el('btn-ritual-teste').addEventListener('click', () => abrirRitual('abertura'));
-
-ligarGrupo('triagem-contexto', 'contexto');
-ligarGrupo('triagem-origem', 'origem');
-ligarGrupo('triagem-prazo', 'prazo');
-
-el('triagem-data').addEventListener('change', (ev) => {
-  if (!escolha || !ev.target.value) return;
-  escolha.data = ev.target.value;
-  talvezConcluir();
-});
-
-document.querySelectorAll('.voltar').forEach((b) => {
-  b.addEventListener('click', async () => {
+function ligarTudo() {
+  ligar('btn-anotar', 'click', abrirAnotar);
+  ligar('btn-salvar', 'click', salvarAnotacao);
+  ligar('btn-voltar-anotar', 'click', async () => {
+    com('campo', (c) => c.blur());
     await pintarAbertura();
     mostrar('abertura');
   });
-});
+  ligar('btn-onde', 'click', () => mostrar('onde'));
+  ligar('btn-medicao', 'click', async () => {
+    await pintarMedicao();
+    mostrar('medicao');
+  });
+  ligar('btn-copiar', 'click', copiarRelatorio);
+  ligar('btn-triar', 'click', abrirTriagem);
+  ligar('btn-ritual-teste', 'click', () => abrirRitual('abertura'));
+
+  ligarGrupo('triagem-contexto', 'contexto');
+  ligarGrupo('triagem-origem', 'origem');
+  ligarGrupo('triagem-prazo', 'prazo');
+
+  ligar('triagem-data', 'change', (ev) => {
+    if (!escolha || !ev.target.value) return;
+    escolha.data = ev.target.value;
+    talvezConcluir();
+  });
+
+  document.querySelectorAll('.voltar').forEach((b) => {
+    b.addEventListener('click', async () => {
+      await pintarAbertura();
+      mostrar('abertura');
+    });
+  });
+}
+
+// As ligacoes vem antes de iniciar(), entao um erro aqui deixaria o app sem
+// desenhar nada. iniciar() roda de qualquer jeito.
+try { ligarTudo(); } catch (e) { console.error('falha ao ligar os botoes', e); }
 
 iniciar();
