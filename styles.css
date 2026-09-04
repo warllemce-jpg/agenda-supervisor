@@ -45,12 +45,17 @@ h1 { font-size: 26px; font-weight: 800; margin: 4px 0 12px; }
    Ocupam a parte de cima como manda a spec, mas descem ate um pouco depois da
    metade da tela: a borda inferior de cada botao cai dentro do alcance do
    polegar de quem segura o Poco com uma mao só. */
+/* Encolheram de 52vh para 34vh quando a lista entrou logo abaixo (pedido do
+   dono, 04/09/2026). Continuam ocupando a parte de cima como manda a decisao 9,
+   mas agora sobra tela para dois ou tres itens aparecerem sem rolar — "saber o
+   que fazer" e metade do principio norteador e estava atras de tres toques. */
 .duplo {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
-  height: 52vh;
-  min-height: 260px;
+  height: 34vh;
+  min-height: 170px;
+  max-height: 240px;
 }
 
 .gigante {
@@ -81,12 +86,18 @@ h1 { font-size: 26px; font-weight: 800; margin: 4px 0 12px; }
 
 /* ---- painel de informacao: le, nao exige nada ---- */
 .painel {
-  margin-top: 20px;
-  padding-top: 16px;
+  margin-top: 16px;
+  padding-top: 14px;
   border-top: 2px solid var(--linha);
-  flex: 1;
 }
-#info-triagem { font-size: 20px; font-weight: 700; margin: 0 0 6px; }
+#info-triagem { font-size: 19px; font-weight: 700; margin: 0 0 4px; }
+#info-etapa { margin: 0; }
+
+#home-lista { flex: 1; margin-top: 16px; }
+.contexto-tag {
+  font-weight: 700;
+  text-transform: lowercase;
+}
 
 /* ---- faixa de ritual pendente ---- */
 .faixa {
@@ -297,4 +308,23 @@ h1 { font-size: 26px; font-weight: 800; margin: 4px 0 12px; }
   border-radius: 12px;
   text-align: center;
   z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
 }
+.aviso-toque button {
+  background: none;
+  border: 2px solid #fff;
+  border-radius: 10px;
+  color: #fff;
+  font: 800 16px/1 inherit;
+  padding: 12px 18px;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
+/* A area de texto do item abre a edicao. Sem botao proprio: o item inteiro ja
+   e o alvo, e um botao a mais competiria com o de concluir. */
+.item-corpo { cursor: pointer; }
+.item-corpo:active { background: #f3f4f6; }

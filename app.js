@@ -39,12 +39,46 @@ function ligar(id, evento, fn) {
   com(id, (alvo) => alvo.addEventListener(evento, fn));
 }
 
-function toque(msg) {
+let avisoAberto = null;
+
+function toque(msg, ms) {
+  mostrarAviso(msg, null, null, ms || 1600);
+}
+
+/* Aviso com uma saida. Nasceu do "concluir e um toque" da spec 5.3: um toque so
+   e rapido, mas tambem e o que o dedo faz sem querer com o celular no bolso, e
+   nao havia volta. Cinco segundos, e nao tres, porque o app e usado em pe e
+   com pressa. */
+function toqueComAcao(msg, rotulo, fn) {
+  mostrarAviso(msg, rotulo, fn, 5000);
+}
+
+function mostrarAviso(msg, rotulo, fn, ms) {
+  if (avisoAberto) { avisoAberto.remove(); avisoAberto = null; }
+
   const d = document.createElement('div');
   d.className = 'aviso-toque';
-  d.textContent = msg;
+  const txt = document.createElement('span');
+  txt.textContent = msg;
+  d.appendChild(txt);
+
+  if (rotulo && fn) {
+    const b = document.createElement('button');
+    b.textContent = rotulo;
+    b.addEventListener('click', () => {
+      d.remove();
+      if (avisoAberto === d) avisoAberto = null;
+      fn();
+    });
+    d.appendChild(b);
+  }
+
   document.body.appendChild(d);
-  setTimeout(() => d.remove(), 1600);
+  avisoAberto = d;
+  setTimeout(() => {
+    d.remove();
+    if (avisoAberto === d) avisoAberto = null;
+  }, ms);
 }
 
 /* =====================================================================
@@ -216,6 +250,39 @@ async function pintarAbertura() {
   });
 
   await pintarFaixa();
+  await pintarHome();
+}
+
+/* A lista na abertura foi pedida pelo dono em 04/09/2026, contra a decisao 9 e
+   a spec 5.1, que reservam a abertura para duas acoes e tres numeros. A objecao
+   do guardiao foi feita e vencida pelo argumento certo: "saber o que fazer" e
+   metade do principio norteador e estava a tres toques de distancia.
+
+   Mistura os tres contextos, por isso cada linha diz de qual e — o "onde estou"
+   continua sendo o caminho para filtrar quando ele esta num lugar so. */
+async function pintarHome() {
+  const alvo = el('home-lista');
+  if (!alvo) return;
+
+  const todas = await Nucleo.lerTudo('pendencias');
+  const agora = new Date();
+  const ativas = todas.filter((p) => p.status === 'ativa');
+  const lista = Nucleo.ordenar(ativas, agora);
+
+  alvo.innerHTML = '';
+  if (!lista.length) {
+    const vazio = document.createElement('p');
+    vazio.className = 'vazio';
+    vazio.textContent = ativas.length === 0 && todas.length === 0
+      ? 'Nada anotado ainda.'
+      : 'Nada em aberto.';
+    alvo.appendChild(vazio);
+    return;
+  }
+
+  lista.forEach((p) => alvo.appendChild(
+    linhaDoItem(p, agora, { contexto: true, repintar: pintarAbertura })
+  ));
 }
 
 async function pintarFaixa() {
@@ -374,15 +441,22 @@ async function pintarLista() {
     return;
   }
 
-  lista.forEach((p) => alvo.appendChild(linhaDoItem(p, agora)));
+  lista.forEach((p) => alvo.appendChild(
+    linhaDoItem(p, agora, { contexto: false, repintar: pintarLista })
+  ));
 }
 
-function linhaDoItem(p, agora) {
+/* opcoes.contexto  — mostra em qual contexto o item esta (lista da abertura,
+                       que mistura os tres; na lista de um contexto seria ruido)
+   opcoes.repintar   — o que redesenhar depois de concluir, desfazer ou editar */
+function linhaDoItem(p, agora, opcoes) {
+  opcoes = opcoes || {};
   const item = document.createElement('div');
   item.className = 'item' + (p.origem === 'terceiro' ? ' terceiro' : '');
 
   const corpo = document.createElement('div');
   corpo.className = 'item-corpo';
+  corpo.addEventListener('click', () => abrirTriagemDe(p.id, opcoes.repintar));
 
   const txt = document.createElement('p');
   txt.className = 'item-txt';
@@ -396,6 +470,14 @@ function linhaDoItem(p, agora) {
   quem.className = 'quem';
   quem.textContent = p.origem === 'terceiro' ? 'de terceiro' : 'minha';
   meta.appendChild(quem);
+
+  if (opcoes.contexto) {
+    meta.appendChild(document.createTextNode(' · '));
+    const c = document.createElement('span');
+    c.className = 'contexto-tag';
+    c.textContent = NOME_CONTEXTO[p.contexto] || p.contexto || 'sem contexto';
+    meta.appendChild(c);
+  }
 
   if (p.prazo && p.prazo.tipo === 'data' && p.prazo.data) {
     meta.appendChild(document.createTextNode(' · '));
@@ -426,7 +508,7 @@ function linhaDoItem(p, agora) {
   ok.className = 'concluir';
   ok.textContent = '✓';
   ok.setAttribute('aria-label', 'concluir');
-  ok.addEventListener('click', () => concluir(p.id));
+  ok.addEventListener('click', () => concluir(p.id, opcoes.repintar));
   item.appendChild(ok);
 
   return item;
@@ -439,7 +521,7 @@ function dataCurta(iso) {
 
 let concluindo = false;
 
-async function concluir(id) {
+async function concluir(id, repintar) {
   if (concluindo) return;   // mesma trava da triagem: dedo rapido nao conclui dois
   concluindo = true;
   try {
@@ -453,11 +535,26 @@ async function concluir(id) {
     await Nucleo.gravar('pendencias', p);
     await registrarNoHistorico(p, agora);
 
-    await pintarLista();
-    toque('Feito.');
+    await (repintar || pintarLista)();
+    toqueComAcao('Feito.', 'desfazer', () => desfazerConclusao(id, repintar));
   } finally {
     concluindo = false;
   }
+}
+
+async function desfazerConclusao(id, repintar) {
+  const todas = await Nucleo.lerTudo('pendencias');
+  const p = todas.find((x) => x.id === id);
+  if (!p || p.status !== 'concluida') return;
+
+  const quando = new Date(p.concluidoEm || Date.now());
+  p.status = 'ativa';
+  p.concluidoEm = null;
+  await Nucleo.gravar('pendencias', p);
+  await removerDoHistorico(id, quando);
+
+  await (repintar || pintarLista)();
+  toque('Voltou para a lista.');
 }
 
 /* O historico e o que alimenta o fechamento das 16:40 e o relatorio mensal.
@@ -478,6 +575,18 @@ async function registrarNoHistorico(p, agora) {
   await Nucleo.gravar('historico', registro);
 }
 
+/* O desfazer usa a data em que o item FOI concluido, nao a de hoje. Concluir as
+   23h58 e desfazer as 00h02 tem que apagar do dia certo, senao o contador do dia
+   anterior fica com um item que nao existe mais. */
+async function removerDoHistorico(id, quando) {
+  const dia = Nucleo.dataISO(quando);
+  const todos = await Nucleo.lerTudo('historico');
+  const registro = todos.find((h) => h.data === dia);
+  if (!registro) return;
+  registro.concluidas = registro.concluidas.filter((c) => c.id !== id);
+  await Nucleo.gravar('historico', registro);
+}
+
 /* =====================================================================
    5b. Triagem — passo 3 do ritual das 07:00 (spec 5.4)
 
@@ -493,9 +602,30 @@ async function registrarNoHistorico(p, agora) {
 let fila = [];
 let posicao = 0;
 let escolha = null;
-let gravando = false;   // trava contra toque duplo, ver talvezConcluir()
+let gravando = false;      // trava contra toque duplo, ver talvezConcluir()
+let editando = false;      // um item ja triado, aberto para correcao
+let retornoTriagem = null; // para onde voltar quando terminar
+
+/* Edicao de um item ja triado. Chega-se aqui tocando no texto do item em
+   qualquer lista. Nao estava na spec; foi pedido pelo dono em 04/09/2026,
+   depois de a triagem existir e ficar claro que "marquei campo e era
+   computador" nao tinha conserto. */
+async function abrirTriagemDe(id, repintar) {
+  const todas = await Nucleo.lerTudo('pendencias');
+  const p = todas.find((x) => x.id === id);
+  if (!p) return;
+
+  fila = [p];
+  posicao = 0;
+  editando = true;
+  retornoTriagem = repintar || pintarLista;
+  mostrar('triagem');
+  pintarItem();
+}
 
 async function abrirTriagem() {
+  editando = false;
+  retornoTriagem = null;
   const todas = await Nucleo.lerTudo('pendencias');
   fila = todas
     .filter((p) => p.status === 'nova')
@@ -514,14 +644,45 @@ async function abrirTriagem() {
 
 function pintarItem() {
   const p = fila[posicao];
-  escolha = { contexto: null, origem: null, prazo: null, data: null };
 
-  com('triagem-progresso', (x) => { x.textContent = (posicao + 1) + ' de ' + fila.length; });
+  escolha = editando
+    ? {
+        contexto: p.contexto,
+        origem: p.origem,
+        prazo: (p.prazo && p.prazo.tipo) || 'nenhum',
+        data: (p.prazo && p.prazo.data) || null
+      }
+    : { contexto: null, origem: null, prazo: null, data: null };
+
+  com('triagem-progresso', (x) => {
+    x.textContent = editando ? 'corrigindo' : (posicao + 1) + ' de ' + fila.length;
+  });
   com('triagem-texto', (x) => { x.textContent = p.texto; });
 
   document.querySelectorAll('#tela-triagem .opcoes button')
     .forEach((b) => b.classList.remove('escolhido'));
   com('triagem-data', (x) => { x.hidden = true; x.value = ''; });
+
+  // No modo edicao nao ha gravacao automatica no terceiro toque — os tres campos
+  // ja vem preenchidos, e gravar sozinho impediria trocar dois de uma vez.
+  com('btn-salvar-triagem', (x) => { x.hidden = !editando; });
+
+  if (!editando) return;
+
+  marcarBotao('triagem-contexto', escolha.contexto);
+  marcarBotao('triagem-origem', escolha.origem);
+  marcarBotao('triagem-prazo', escolha.prazo);
+  if (escolha.prazo === 'data' && escolha.data) {
+    com('triagem-data', (x) => { x.hidden = false; x.value = escolha.data; });
+  }
+}
+
+function marcarBotao(idGrupo, valor) {
+  com(idGrupo, (g) => {
+    g.querySelectorAll('button').forEach((b) => {
+      b.classList.toggle('escolhido', b.dataset.v === valor);
+    });
+  });
 }
 
 function ligarGrupo(id, campo) {
@@ -553,6 +714,7 @@ function ligarGrupo(id, campo) {
 
 function talvezConcluir() {
   if (!escolha) return;
+  if (editando) return;   // ali quem grava e o botao SALVAR
   if (!escolha.contexto || !escolha.origem || !escolha.prazo) return;
   if (escolha.prazo === 'data' && !escolha.data) return;
   // Dedo rapido no terceiro botao dispara dois cliques antes de o primeiro
@@ -573,12 +735,36 @@ async function gravarItem() {
   p.status = 'ativa';
   await Nucleo.gravar('pendencias', p);
 
+  if (editando) {
+    const voltar = retornoTriagem || pintarLista;
+    editando = false;
+    retornoTriagem = null;
+    await voltar();
+    mostrar(voltar === pintarLista ? 'lista' : 'abertura');
+    toque('Corrigido.');
+    return;
+  }
+
   posicao++;
   if (posicao < fila.length) { pintarItem(); return; }
 
   await pintarAbertura();
   mostrar('abertura');
   toque(fila.length === 1 ? 'Triado.' : fila.length + ' triados.');
+}
+
+async function salvarEdicao() {
+  if (!escolha || !escolha.contexto || !escolha.origem || !escolha.prazo) {
+    toque('Falta marcar alguma coisa.');
+    return;
+  }
+  if (escolha.prazo === 'data' && !escolha.data) {
+    toque('Escolha a data.');
+    return;
+  }
+  if (gravando) return;
+  gravando = true;
+  gravarItem().finally(() => { gravando = false; });
 }
 
 /* =====================================================================
@@ -714,6 +900,7 @@ function ligarTudo() {
   });
   ligar('btn-copiar', 'click', copiarRelatorio);
   ligar('btn-triar', 'click', abrirTriagem);
+  ligar('btn-salvar-triagem', 'click', salvarEdicao);
   ligar('btn-ritual-teste', 'click', () => abrirRitual('abertura'));
 
   ligarGrupo('triagem-contexto', 'contexto');
@@ -728,6 +915,9 @@ function ligarTudo() {
 
   document.querySelectorAll('.voltar').forEach((b) => {
     b.addEventListener('click', async () => {
+      // Sair no meio de uma correcao descarta a correcao, nao o item.
+      editando = false;
+      retornoTriagem = null;
       await pintarAbertura();
       mostrar('abertura');
     });

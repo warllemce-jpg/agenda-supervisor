@@ -54,8 +54,10 @@
 
   <div class="painel">
     <p id="info-triagem">—</p>
-    <p class="sussurro" id="info-etapa">Esqueleto do Dia&nbsp;0 — só captura e relógio.</p>
+    <p class="sussurro" id="info-etapa"></p>
   </div>
+
+  <div id="home-lista"></div>
 
   <button id="btn-medicao" class="link">medição do gatilho</button>
 </section>
@@ -128,6 +130,10 @@
     </div>
     <input type="date" id="triagem-data" hidden>
   </div>
+
+  <!-- So aparece ao editar um item ja triado: ali o app nao pode gravar sozinho
+       no terceiro toque, senao trocar dois campos seria impossivel. -->
+  <button id="btn-salvar-triagem" class="acao principal larga" hidden>SALVAR</button>
 
   <button class="link voltar">sair, continuo depois</button>
 </section>
