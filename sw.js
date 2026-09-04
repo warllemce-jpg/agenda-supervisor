@@ -15,7 +15,7 @@ importScripts('./nucleo.js');
    apagado no activate, entao HTML, CSS e JS trocam juntos. Sem isso os arquivos
    chegam um a um e existe uma janela em que o app.js novo roda com o index.html
    velho — foi o que deu tela branca em 04/09/2026. */
-var CACHE = 'agenda-v2';
+var CACHE = 'agenda-v3';
 
 var ESQUELETO = [
   './',

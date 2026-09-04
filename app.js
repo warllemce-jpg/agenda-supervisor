@@ -10,7 +10,8 @@
 const tela = (id) => document.getElementById('tela-' + id);
 const el = (id) => document.getElementById(id);
 
-const TELAS = ['primeira', 'abertura', 'anotar', 'onde', 'ritual', 'triagem', 'medicao'];
+const TELAS = ['primeira', 'abertura', 'anotar', 'onde', 'lista',
+               'ritual', 'triagem', 'medicao'];
 let telaAtual = null;
 
 /* Toda leitura de elemento aqui tolera o elemento nao existir.
@@ -193,11 +194,27 @@ async function registrarSyncPeriodico() {
    3. Abertura
    ===================================================================== */
 
+/* Abaixo dos dois botoes so entra informacao, nunca acao (spec 5.1). Ele bate o
+   olho e sabe como esta o dia; se quiser fazer algo, os dois botoes estao la em
+   cima. A ordem e a da spec: o que saiu primeiro, a fila depois. */
 async function pintarAbertura() {
-  const n = await Nucleo.contarTriagem();
-  el('info-triagem').textContent = n === 0
-    ? 'Nada aguardando triagem.'
-    : n + (n === 1 ? ' anotação aguardando triagem' : ' anotações aguardando triagem');
+  const hoje = Nucleo.dataISO(new Date());
+  const historico = await Nucleo.lerTudo('historico');
+  const dia = historico.find((h) => h.data === hoje);
+  const feitas = dia ? dia.concluidas.length : 0;
+  const naFila = await Nucleo.contarTriagem();
+
+  com('info-triagem', (x) => {
+    x.textContent = feitas === 0
+      ? 'Nada concluído hoje ainda.'
+      : feitas + (feitas === 1 ? ' concluída hoje' : ' concluídas hoje');
+  });
+  com('info-etapa', (x) => {
+    x.textContent = naFila === 0
+      ? 'Nada aguardando triagem.'
+      : naFila + (naFila === 1 ? ' anotação aguardando triagem' : ' anotações aguardando triagem');
+  });
+
   await pintarFaixa();
 }
 
@@ -310,6 +327,155 @@ function fonteEmPalavras(tipo) {
   if (tipo === 'sw') return 'sozinho, em segundo plano';
   if (tipo === 'app') return 'só quando o app abriu';
   return tipo;
+}
+
+/* =====================================================================
+   4b. Onde estou — a outra metade do princípio norteador (spec 5.3)
+
+   "Ao abrir o app existem so dois motivos possiveis: ou tenho algo para
+   despejar, ou quero saber o que fazer."  ANOTAR era a primeira metade.
+   Esta e a segunda.
+
+   O contexto e escolhido primeiro porque e a unica coisa que o app nao tem
+   como saber: se ele esta na frente do computador, no campo ou no telefone.
+   Sabendo isso, o resto da ordem ele resolve sozinho (decisoes 10 e 11).
+   ===================================================================== */
+
+const NOME_CONTEXTO = {
+  computador: 'Computador',
+  campo: 'Campo',
+  pessoa: 'Telefone / pessoa'
+};
+
+let contextoAberto = null;
+
+async function abrirLista(contexto) {
+  contextoAberto = contexto;
+  com('lista-titulo', (x) => { x.textContent = NOME_CONTEXTO[contexto] || contexto; });
+  mostrar('lista');
+  await pintarLista();
+}
+
+async function pintarLista() {
+  const alvo = el('lista-itens');
+  if (!alvo) return;
+
+  const todas = await Nucleo.lerTudo('pendencias');
+  const agora = new Date();
+  const ativas = todas.filter((p) => p.status === 'ativa' && p.contexto === contextoAberto);
+  const lista = Nucleo.ordenar(ativas, agora);
+
+  alvo.innerHTML = '';
+  if (!lista.length) {
+    const vazio = document.createElement('p');
+    vazio.className = 'vazio';
+    vazio.textContent = 'Nada aqui.';
+    alvo.appendChild(vazio);
+    return;
+  }
+
+  lista.forEach((p) => alvo.appendChild(linhaDoItem(p, agora)));
+}
+
+function linhaDoItem(p, agora) {
+  const item = document.createElement('div');
+  item.className = 'item' + (p.origem === 'terceiro' ? ' terceiro' : '');
+
+  const corpo = document.createElement('div');
+  corpo.className = 'item-corpo';
+
+  const txt = document.createElement('p');
+  txt.className = 'item-txt';
+  txt.textContent = p.texto;
+  corpo.appendChild(txt);
+
+  const meta = document.createElement('p');
+  meta.className = 'item-meta';
+
+  const quem = document.createElement('span');
+  quem.className = 'quem';
+  quem.textContent = p.origem === 'terceiro' ? 'de terceiro' : 'minha';
+  meta.appendChild(quem);
+
+  if (p.prazo && p.prazo.tipo === 'data' && p.prazo.data) {
+    meta.appendChild(document.createTextNode(' · '));
+    const v = document.createElement('span');
+    v.className = 'vence';
+    v.textContent = (p.prazo.data < Nucleo.dataISO(agora) ? 'venceu ' : 'vence ')
+                  + dataCurta(p.prazo.data);
+    meta.appendChild(v);
+  } else if (p.prazo && p.prazo.tipo === 'semana') {
+    meta.appendChild(document.createTextNode(' · esta semana'));
+  }
+
+  // Indicador de idade aos 14 dias (decisao 11). E so um numero: a pergunta de
+  // faxina, aos 21, e da Etapa 2.
+  const idade = Nucleo.idadeDias(p, agora);
+  if (idade >= Nucleo.IDADE_ALERTA) {
+    meta.appendChild(document.createTextNode(' · '));
+    const i = document.createElement('span');
+    i.className = 'idade';
+    i.textContent = idade + ' dias';
+    meta.appendChild(i);
+  }
+
+  corpo.appendChild(meta);
+  item.appendChild(corpo);
+
+  const ok = document.createElement('button');
+  ok.className = 'concluir';
+  ok.textContent = '✓';
+  ok.setAttribute('aria-label', 'concluir');
+  ok.addEventListener('click', () => concluir(p.id));
+  item.appendChild(ok);
+
+  return item;
+}
+
+function dataCurta(iso) {
+  const partes = String(iso).split('-');
+  return partes[2] + '/' + partes[1];
+}
+
+let concluindo = false;
+
+async function concluir(id) {
+  if (concluindo) return;   // mesma trava da triagem: dedo rapido nao conclui dois
+  concluindo = true;
+  try {
+    const todas = await Nucleo.lerTudo('pendencias');
+    const p = todas.find((x) => x.id === id);
+    if (!p || p.status !== 'ativa') return;
+
+    const agora = new Date();
+    p.status = 'concluida';
+    p.concluidoEm = agora.toISOString();
+    await Nucleo.gravar('pendencias', p);
+    await registrarNoHistorico(p, agora);
+
+    await pintarLista();
+    toque('Feito.');
+  } finally {
+    concluindo = false;
+  }
+}
+
+/* O historico e o que alimenta o fechamento das 16:40 e o relatorio mensal.
+   Sem gravar aqui, no momento da conclusao, nao ha como montar depois: a lista
+   de concluidas do dia nao pode ser reconstruida a partir das pendencias, que
+   so guardam o estado final. */
+async function registrarNoHistorico(p, agora) {
+  const dia = Nucleo.dataISO(agora);
+  const todos = await Nucleo.lerTudo('historico');
+  const registro = todos.find((h) => h.data === dia)
+    || { data: dia, concluidas: [], top3Definidas: [], top3Concluidas: [], descartadas: 0 };
+
+  if (registro.concluidas.some((c) => c.id === p.id)) return;   // nao conta duas vezes
+  registro.concluidas.push({
+    id: p.id, texto: p.texto, origem: p.origem,
+    contexto: p.contexto, tipo: 'pendencia'
+  });
+  await Nucleo.gravar('historico', registro);
 }
 
 /* =====================================================================
@@ -537,6 +703,11 @@ function ligarTudo() {
     mostrar('abertura');
   });
   ligar('btn-onde', 'click', () => mostrar('onde'));
+  ligar('contextos', 'click', (ev) => {
+    const b = ev.target.closest('button');
+    if (b && b.dataset.v) abrirLista(b.dataset.v);
+  });
+  ligar('btn-voltar-lista', 'click', () => mostrar('onde'));
   ligar('btn-medicao', 'click', async () => {
     await pintarMedicao();
     mostrar('medicao');

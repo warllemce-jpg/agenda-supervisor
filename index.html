@@ -73,14 +73,19 @@
 <!-- ============ onde estou (esqueleto) ============ -->
 <section id="tela-onde" class="tela" hidden>
   <h1>Onde estou</h1>
-  <div class="contextos">
-    <button class="gigante secundario" disabled>COMPUTADOR</button>
-    <button class="gigante secundario" disabled>CAMPO</button>
-    <button class="gigante secundario" disabled>TELEFONE / PESSOA</button>
+  <div class="contextos" id="contextos">
+    <button class="gigante secundario" data-v="computador">COMPUTADOR</button>
+    <button class="gigante secundario" data-v="campo">CAMPO</button>
+    <button class="gigante secundario" data-v="pessoa">TELEFONE / PESSOA</button>
   </div>
-  <p class="sussurro">As listas entram na Etapa 1, depois da triagem.
-     Aqui só o alcance do polegar está sendo testado.</p>
   <button class="link voltar">voltar</button>
+</section>
+
+<!-- ============ lista de um contexto (spec 5.3) ============ -->
+<section id="tela-lista" class="tela" hidden>
+  <h1 id="lista-titulo">—</h1>
+  <div id="lista-itens"></div>
+  <button id="btn-voltar-lista" class="link">← outro contexto</button>
 </section>
 
 <!-- ============ ritual (esqueleto instrumentado) ============ -->

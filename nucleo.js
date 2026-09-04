@@ -225,6 +225,55 @@
     });
   }
 
+  /* ---------- ordenacao das listas (decisao 11) ----------
+
+     "3 do dia -> prazo chegando -> mais antigo primeiro."
+
+     Quem ordena e o app, nunca o usuario: a decisao 10 manda mostrar a lista do
+     contexto ja ordenada, e nao um item de cada vez. Ele bate o olho e ve o que
+     vem primeiro, sem ter que escolher.
+
+     Funcao pura, sem banco, para poder ser testada em node. */
+
+  var IDADE_ALERTA = 14;      // a partir daqui a lista mostra a idade do item
+  var AVISO_PRAZO_DIAS = 2;   // item com data entra na ordenacao 2 dias antes
+
+  function pesoOrdem(p, agora) {
+    var hoje = dataISO(agora);
+
+    // 1. as 3 do dia — e so as de hoje: nao sobrevivem a virada (secao 6)
+    if (p.prioridade && p.prioridade.ehTop3 && p.prioridade.data === hoje) return 0;
+
+    // 2. prazo chegando, ou ja vencido
+    if (p.prazo && p.prazo.tipo === 'data' && p.prazo.data) {
+      var limite = dataISO(new Date(agora.getFullYear(), agora.getMonth(),
+                                    agora.getDate() + AVISO_PRAZO_DIAS));
+      if (p.prazo.data <= limite) return 1;
+    }
+
+    // 3. "esta semana" ganha prioridade a partir de quinta (secao 6)
+    if (p.prazo && p.prazo.tipo === 'semana' && agora.getDay() >= 4) return 2;
+
+    return 3;
+  }
+
+  function ordenar(lista, agora) {
+    return lista.slice().sort(function (a, b) {
+      var pa = pesoOrdem(a, agora), pb = pesoOrdem(b, agora);
+      if (pa !== pb) return pa - pb;
+
+      var da = (a.prazo && a.prazo.tipo === 'data' && a.prazo.data) ? a.prazo.data : '9999-12-31';
+      var db = (b.prazo && b.prazo.tipo === 'data' && b.prazo.data) ? b.prazo.data : '9999-12-31';
+      if (da !== db) return da < db ? -1 : 1;
+
+      return String(a.criadoEm).localeCompare(String(b.criadoEm));  // mais antigo primeiro
+    });
+  }
+
+  function idadeDias(p, agora) {
+    return Math.floor((agora - new Date(p.criadoEm)) / 86400000);
+  }
+
   /* ---------- numero concreto para a notificacao ----------
      Decisao 16: a notificacao traz numero, nunca texto generico.
      No Dia 0 o unico numero real que existe e a fila de triagem. */
@@ -258,6 +307,8 @@
     abrirDB: abrirDB, lerTudo: lerTudo, gravar: gravar,
     lerConfig: lerConfig, escreverConfig: escreverConfig,
     chaveRitual: chaveRitual, logDoRitual: logDoRitual,
-    varrer: varrer, contarTriagem: contarTriagem, textoNotificacao: textoNotificacao
+    varrer: varrer, contarTriagem: contarTriagem, textoNotificacao: textoNotificacao,
+    IDADE_ALERTA: IDADE_ALERTA, AVISO_PRAZO_DIAS: AVISO_PRAZO_DIAS,
+    pesoOrdem: pesoOrdem, ordenar: ordenar, idadeDias: idadeDias
   };
 })(typeof self !== 'undefined' ? self : this);
