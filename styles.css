@@ -139,6 +139,7 @@ h1 { font-size: 26px; font-weight: 800; margin: 4px 0 12px; }
   cursor: pointer;
 }
 .acao.principal { background: var(--tinta); color: #fff; }
+.acao[disabled] { opacity: 0.35; }
 
 .link {
   background: none;
@@ -180,6 +181,63 @@ h1 { font-size: 26px; font-weight: 800; margin: 4px 0 12px; }
 .reg.app { border-left-color: var(--marca); }
 .reg.ausente { border-left-color: var(--alerta); }
 .reg.erro { border-left-color: var(--alerta); background: #fef2f2; }
+
+/* ---- triagem ----
+   Tres toques por item (spec 5.4). Os grupos ficam na ordem em que a pergunta
+   aparece na cabeca: onde eu faco isso, de quem e, quando vence. */
+.progresso {
+  color: var(--tinta-fraca);
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0 0 10px;
+  font-variant-numeric: tabular-nums;
+}
+.item-texto {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 0 0 24px;
+  padding-bottom: 18px;
+  border-bottom: 2px solid var(--linha);
+}
+.grupo { margin-bottom: 20px; }
+.rotulo {
+  display: block;
+  font-size: 14px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--tinta-fraca);
+  margin-bottom: 8px;
+}
+.opcoes { display: flex; flex-wrap: wrap; gap: 8px; }
+.opcoes button {
+  flex: 1 1 auto;
+  min-height: 60px;
+  min-width: 96px;
+  font: 700 17px/1.2 inherit;
+  color: var(--tinta);
+  background: var(--papel);
+  border: 3px solid var(--tinta);
+  border-radius: 12px;
+  padding: 10px 14px;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+.opcoes button.escolhido { background: var(--tinta); color: #fff; }
+#triagem-data {
+  width: 100%;
+  margin-top: 10px;
+  font: 700 19px/1 inherit;
+  padding: 16px;
+  border: 3px solid var(--marca);
+  border-radius: 12px;
+  background: var(--papel);
+  color: var(--tinta);
+}
+#triagem-data[hidden] { display: none; }
+
+.acao.larga { width: 100%; margin: 10px 0 18px; }
 
 .aviso-toque {
   position: fixed;

@@ -10,7 +10,7 @@
 const tela = (id) => document.getElementById('tela-' + id);
 const el = (id) => document.getElementById(id);
 
-const TELAS = ['primeira', 'abertura', 'anotar', 'onde', 'ritual', 'medicao'];
+const TELAS = ['primeira', 'abertura', 'anotar', 'onde', 'ritual', 'triagem', 'medicao'];
 let telaAtual = null;
 
 function mostrar(nome) {
@@ -275,6 +275,13 @@ async function abrirRitual(id) {
   });
   await Nucleo.escreverConfig('ultimoRitualAberto', chave);
 
+  const naFila = await Nucleo.contarTriagem();
+  el('triar-quantas').textContent = naFila ? '(' + naFila + ')' : '';
+  el('btn-triar').disabled = naFila === 0;
+  el('ritual-restante').textContent = naFila === 0
+    ? 'Nada para triar. Os outros passos do ritual entram em seguida.'
+    : 'Os outros passos do ritual entram em seguida.';
+
   mostrar('ritual');
 }
 
@@ -282,6 +289,108 @@ function fonteEmPalavras(tipo) {
   if (tipo === 'sw') return 'sozinho, em segundo plano';
   if (tipo === 'app') return 'só quando o app abriu';
   return tipo;
+}
+
+/* =====================================================================
+   5b. Triagem — passo 3 do ritual das 07:00 (spec 5.4)
+
+   Tres toques por item: onde, de quem, quando. No terceiro toque o item e
+   gravado e o proximo aparece sozinho — nao ha botao de confirmar, porque
+   confirmar seria um quarto toque em cima de uma decisao ja tomada.
+
+   Contexto e origem so sao marcados AQUI, nunca na captura (decisoes 6 e 8):
+   na hora de anotar, parar para classificar e o que faz a pessoa desistir de
+   anotar.
+   ===================================================================== */
+
+let fila = [];
+let posicao = 0;
+let escolha = null;
+let gravando = false;   // trava contra toque duplo, ver talvezConcluir()
+
+async function abrirTriagem() {
+  const todas = await Nucleo.lerTudo('pendencias');
+  fila = todas
+    .filter((p) => p.status === 'nova')
+    .sort((a, b) => a.criadoEm.localeCompare(b.criadoEm));  // mais antigo primeiro
+  posicao = 0;
+
+  if (!fila.length) {
+    await pintarAbertura();
+    mostrar('abertura');
+    toque('Nada para triar.');
+    return;
+  }
+  mostrar('triagem');
+  pintarItem();
+}
+
+function pintarItem() {
+  const p = fila[posicao];
+  escolha = { contexto: null, origem: null, prazo: null, data: null };
+
+  el('triagem-progresso').textContent = (posicao + 1) + ' de ' + fila.length;
+  el('triagem-texto').textContent = p.texto;
+
+  document.querySelectorAll('#tela-triagem .opcoes button')
+    .forEach((b) => b.classList.remove('escolhido'));
+  el('triagem-data').hidden = true;
+  el('triagem-data').value = '';
+}
+
+function ligarGrupo(id, campo) {
+  el(id).addEventListener('click', (ev) => {
+    const b = ev.target.closest('button');
+    if (!b) return;
+    el(id).querySelectorAll('button').forEach((x) => x.classList.remove('escolhido'));
+    b.classList.add('escolhido');
+    escolha[campo] = b.dataset.v;
+
+    if (campo === 'prazo') {
+      const entrada = el('triagem-data');
+      if (b.dataset.v === 'data') {
+        // Data marcada e o caminho raro: ganha um toque a mais, e so ele.
+        entrada.hidden = false;
+        if (entrada.showPicker) { try { entrada.showPicker(); } catch (e) { entrada.focus(); } }
+        else entrada.focus();
+        return;
+      }
+      entrada.hidden = true;
+      entrada.value = '';
+      escolha.data = null;
+    }
+    talvezConcluir();
+  });
+}
+
+function talvezConcluir() {
+  if (!escolha) return;
+  if (!escolha.contexto || !escolha.origem || !escolha.prazo) return;
+  if (escolha.prazo === 'data' && !escolha.data) return;
+  // Dedo rapido no terceiro botao dispara dois cliques antes de o primeiro
+  // gravar. Sem esta trava, o contador avanca duas vezes e um item da fila
+  // e pulado sem nunca ter sido triado.
+  if (gravando) return;
+  gravando = true;
+  gravarItem().finally(() => { gravando = false; });
+}
+
+async function gravarItem() {
+  const p = fila[posicao];
+  p.contexto = escolha.contexto;
+  p.origem = escolha.origem;
+  p.prazo = escolha.prazo === 'data'
+    ? { tipo: 'data', data: escolha.data }
+    : { tipo: escolha.prazo };
+  p.status = 'ativa';
+  await Nucleo.gravar('pendencias', p);
+
+  posicao++;
+  if (posicao < fila.length) { pintarItem(); return; }
+
+  await pintarAbertura();
+  mostrar('abertura');
+  toque(fila.length === 1 ? 'Triado.' : fila.length + ' triados.');
 }
 
 /* =====================================================================
@@ -410,6 +519,18 @@ el('btn-medicao').addEventListener('click', async () => {
   mostrar('medicao');
 });
 el('btn-copiar').addEventListener('click', copiarRelatorio);
+el('btn-triar').addEventListener('click', abrirTriagem);
+el('btn-ritual-teste').addEventListener('click', () => abrirRitual('abertura'));
+
+ligarGrupo('triagem-contexto', 'contexto');
+ligarGrupo('triagem-origem', 'origem');
+ligarGrupo('triagem-prazo', 'prazo');
+
+el('triagem-data').addEventListener('change', (ev) => {
+  if (!escolha || !ev.target.value) return;
+  escolha.data = ev.target.value;
+  talvezConcluir();
+});
 
 document.querySelectorAll('.voltar').forEach((b) => {
   b.addEventListener('click', async () => {

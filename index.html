@@ -87,9 +87,44 @@
 <section id="tela-ritual" class="tela" hidden>
   <h1 id="ritual-titulo">Ritual</h1>
   <p class="lead" id="ritual-corpo"></p>
-  <p class="sussurro">Os passos do ritual entram na Etapa 1. O que está sendo medido
-     aqui é se você chegou nesta tela — e com quanto atraso.</p>
+  <button id="btn-triar" class="acao principal larga">TRIAR <span id="triar-quantas"></span></button>
+  <p class="sussurro" id="ritual-restante">Os outros passos do ritual entram em seguida.</p>
   <button class="link voltar">voltar</button>
+</section>
+
+<!-- ============ triagem — passo 3 do ritual das 07:00 ============ -->
+<section id="tela-triagem" class="tela" hidden>
+  <p class="progresso" id="triagem-progresso"></p>
+  <p class="item-texto" id="triagem-texto"></p>
+
+  <div class="grupo">
+    <span class="rotulo">Onde</span>
+    <div class="opcoes" id="triagem-contexto">
+      <button data-v="computador">Computador</button>
+      <button data-v="campo">Campo</button>
+      <button data-v="pessoa">Telefone / pessoa</button>
+    </div>
+  </div>
+
+  <div class="grupo">
+    <span class="rotulo">De quem</span>
+    <div class="opcoes" id="triagem-origem">
+      <button data-v="minha">Minha</button>
+      <button data-v="terceiro">De terceiro</button>
+    </div>
+  </div>
+
+  <div class="grupo">
+    <span class="rotulo">Quando</span>
+    <div class="opcoes" id="triagem-prazo">
+      <button data-v="nenhum">Sem prazo</button>
+      <button data-v="semana">Esta semana</button>
+      <button data-v="data">Data</button>
+    </div>
+    <input type="date" id="triagem-data" hidden>
+  </div>
+
+  <button class="link voltar">sair, continuo depois</button>
 </section>
 
 <!-- ============ medicao ============ -->
@@ -104,6 +139,10 @@
     <button class="link voltar">voltar</button>
     <button id="btn-copiar" class="acao">Copiar relatório</button>
   </div>
+  <!-- Atalho de teste: durante a semana de medicao o ritual pode nao disparar,
+       e sem isto nao ha como chegar na triagem para experimentar. Sai quando os
+       rituais estiverem completos. -->
+  <button id="btn-ritual-teste" class="link">abrir o ritual da manhã (teste)</button>
 </section>
 
 <script src="./nucleo.js"></script>
